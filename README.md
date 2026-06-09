@@ -108,7 +108,7 @@ OrgMind/
 ## Build Phases
 
 - [x] **Phase 1 — Foundation:** Node.js, Neo4j, Redis installed, connected, and verified
-- [ ] **Phase 2 — Intelligence Layer:** Python microservice for entity extraction and graph population
+- [x] **Phase 2 — Intelligence Layer:** Python microservice for entity extraction and graph population
 - [ ] **Phase 3 — Query Engine:** Natural language → graph query → LLM answer pipeline
 - [ ] **Phase 4 — Dashboard:** React frontend with graph visualisation and query interface
 - [ ] **Phase 5 — Polish and Launch:** Demo data, demo video, public launch
