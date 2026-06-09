@@ -111,7 +111,7 @@ OrgMind/
 - [x] **Phase 2 — Intelligence Layer:** Python microservice for entity extraction and graph population
 - [x] **Phase 3 — Query Engine:** Natural language → graph query → LLM answer pipeline
 - [x] **Phase 4 — Dashboard:** React frontend with graph visualisation and query interface
-- [ ] **Phase 5 — Polish and Launch:** Demo data, demo video, public launch
+- [x] **Phase 5 — Launch:** Load production demo data, record walkthrough video, publish publicly
 
 ---
 
