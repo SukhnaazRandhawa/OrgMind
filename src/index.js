@@ -70,3 +70,38 @@ app.post('/ingest', async (req, res) => {
     res.status(500).json({ error: 'Microservice unreachable', details: err.message });
   }
 });
+
+// Query route — natural language question → graph → LLM answer
+app.post('/query', async (req, res) => {
+  const { question } = req.body;
+
+  if (!question) {
+    return res.status(400).json({ error: 'No question provided' });
+  }
+
+  try {
+    // Check Redis cache first
+    const cacheKey = `query:${question.toLowerCase().trim()}`;
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      return res.json({ source: 'cache', result: JSON.parse(cached) });
+    }
+
+    // Forward to Python microservice
+    const response = await fetch('http://localhost:5001/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question })
+    });
+
+    const result = await response.json();
+
+    // Cache for 1 hour
+    await redis.set(cacheKey, JSON.stringify(result), 'EX', 3600);
+
+    res.json({ source: 'live', result });
+
+  } catch (err) {
+    res.status(500).json({ error: 'Query failed', details: err.message });
+  }
+});

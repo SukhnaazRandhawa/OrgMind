@@ -1,6 +1,8 @@
 from flask import Flask, request, jsonify
 import spacy
 from neo4j import GraphDatabase
+import requests
+import json
 
 app = Flask(__name__)
 
@@ -78,6 +80,50 @@ def save_to_graph(entities, decisions, raw_text):
                         MERGE (p)-[:INVOLVED_IN]->(d)
                     """, person=person['text'], decision=decision['text'])
 
+def question_to_cypher(question):
+    """Convert a natural language question into a Cypher graph query."""
+    question_lower = question.lower()
+    
+    # Decision-focused questions
+    if any(word in question_lower for word in ['decision', 'decided', 'agreed', 'reversed', 'paused']):
+        if any(word in question_lower for word in ['who', 'person', 'people']):
+            return """
+                MATCH (p:Entity {type: 'PERSON'})-[:INVOLVED_IN]->(d:Decision)
+                RETURN p.name as person, d.text as decision
+            """
+        return "MATCH (d:Decision) RETURN d.text as decision, d.keyword as keyword"
+    
+    # People-focused questions
+    if any(word in question_lower for word in ['who', 'person', 'people', 'team']):
+        return "MATCH (p:Entity {type: 'PERSON'}) RETURN p.name as name"
+    
+    # Date-focused questions
+    if any(word in question_lower for word in ['when', 'date', 'month', 'quarter']):
+        return "MATCH (d:Entity {type: 'DATE'}) RETURN d.name as date"
+    
+    # Default — return everything
+    return "MATCH (n) RETURN n LIMIT 25"
+
+def ask_llama(question, graph_data):
+    """Send graph results to Llama 3.2 and get a clean answer."""
+    prompt = f"""You are an organisational memory assistant. 
+A user asked: "{question}"
+
+Here is the relevant data from the knowledge graph:
+{json.dumps(graph_data, indent=2)}
+
+Give a clear, concise answer based only on this data. 
+If the data is empty, say you don't have enough information yet.
+Keep your answer to 2-3 sentences maximum."""
+
+    response = requests.post('http://localhost:11434/api/generate', json={
+        'model': 'llama3.2',
+        'prompt': prompt,
+        'stream': False
+    })
+    
+    return response.json()['response']
+
 @app.route('/extract', methods=['POST'])
 def extract():
     """Main endpoint — receives text, extracts entities, saves to graph."""
@@ -107,5 +153,32 @@ def extract():
 def health():
     return jsonify({'status': ' Python microservice running'})
 
+@app.route('/query', methods=['POST'])
+def query():
+    """Receive a natural language question, query the graph, return LLM answer."""
+    data = request.json
+    
+    if not data or 'question' not in data:
+        return jsonify({'error': 'No question provided'}), 400
+    
+    question = data['question']
+    
+    # Convert question to Cypher
+    cypher = question_to_cypher(question)
+    
+    # Run against Neo4j
+    with driver.session() as session:
+        result = session.run(cypher)
+        graph_data = [record.data() for record in result]
+    
+    # Send to Llama for a clean answer
+    answer = ask_llama(question, graph_data)
+    
+    return jsonify({
+        'question': question,
+        'answer': answer,
+        'raw_graph_data': graph_data
+    })
+    
 if __name__ == '__main__':
     app.run(port=5001, debug=True)
