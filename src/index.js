@@ -4,6 +4,9 @@ const { driver, redis } = require('../config/db');
 const app = express();
 app.use(express.json());
 
+const cors = require('cors');
+app.use(cors());
+
 // Test route — checks Redis then Neo4j
 app.get('/health', async (req, res) => {
   const results = {};
@@ -103,5 +106,32 @@ app.post('/query', async (req, res) => {
 
   } catch (err) {
     res.status(500).json({ error: 'Query failed', details: err.message });
+  }
+});
+
+// Stats route — returns graph node and relationship counts
+app.get('/stats', async (req, res) => {
+  try {
+    const session = driver.session();
+
+    const nodeResult = await session.run('MATCH (n) RETURN count(n) as count');
+    const relResult = await session.run('MATCH ()-[r]->() RETURN count(r) as count');
+    const recentNodes = await session.run(
+      'MATCH (n) RETURN labels(n)[0] as type, n.name as name, n.text as text LIMIT 50'
+    );
+
+    await session.close();
+
+    res.json({
+      nodes: nodeResult.records[0].get('count').toNumber(),
+      relationships: relResult.records[0].get('count').toNumber(),
+      recentNodes: recentNodes.records.map(r => ({
+        type: r.get('type'),
+        name: r.get('name'),
+        text: r.get('text')
+      }))
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
