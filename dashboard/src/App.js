@@ -12,6 +12,11 @@ export default function App() {
   const [loading, setLoading] = useState({ ingest: false, query: false });
   const [stats, setStats] = useState({ nodes: 0, relationships: 0, queries: 0 });
   const [graphNodes, setGraphNodes] = useState([]);
+  const [suggestions, setSuggestions] = useState([
+  "Who was involved in decisions?",
+  "What decisions were made?",
+  "Which people are in the graph?",
+]);
 
   // Fetch graph stats from Neo4j via our API
   const fetchStats = useCallback(async () => {
@@ -29,19 +34,38 @@ export default function App() {
   }, [fetchStats]);
 
   const handleIngest = async () => {
-    if (!transcript.trim()) return;
-    setLoading((l) => ({ ...l, ingest: true }));
-    setIngestResult(null);
-    try {
-      const res = await axios.post(`${API}/ingest`, { text: transcript });
-      setIngestResult(res.data.result);
-      await fetchStats();
-    } catch (err) {
-      setIngestResult({ error: "Failed to connect to OrgMind API" });
-    } finally {
-      setLoading((l) => ({ ...l, ingest: false }));
-    }
-  };
+  if (!transcript.trim()) return;
+  setLoading((l) => ({ ...l, ingest: true }));
+  setIngestResult(null);
+  try {
+    const res = await axios.post(`${API}/ingest`, { text: transcript });
+    setIngestResult(res.data.result);
+
+    // Generate dynamic example questions from extracted entities
+    const people = res.data.result.entities
+      ?.filter(e => e.type === 'PERSON')
+      .slice(0, 2)
+      .map(e => `What decisions did ${e.text} make?`) || [];
+
+    const decisions = res.data.result.decisions
+      ?.slice(0, 1)
+      .map(d => `Who was involved in: "${d.text.slice(0, 40)}..."`) || [];
+
+    const newSuggestions = [
+      ...people,
+      ...decisions,
+      "What decisions were reversed?",
+    ].slice(0, 3);
+
+    if (newSuggestions.length > 0) setSuggestions(newSuggestions);
+
+    await fetchStats();
+  } catch (err) {
+    setIngestResult({ error: "Failed to connect to OrgMind API" });
+  } finally {
+    setLoading((l) => ({ ...l, ingest: false }));
+  }
+};
 
   const handleQuery = async () => {
     if (!question.trim()) return;
@@ -229,11 +253,7 @@ export default function App() {
             {/* Example questions */}
             <div>
               <div className="response-label" style={{ marginBottom: 8 }}>Try asking</div>
-              {[
-                "Who was involved in decisions?",
-                "What decisions were made?",
-                "Which people are in the graph?",
-              ].map((q) => (
+              {suggestions.map((q) => (
                 <div
                   key={q}
                   onClick={() => setQuestion(q)}
