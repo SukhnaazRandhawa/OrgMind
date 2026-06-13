@@ -74,7 +74,8 @@ export default function App() {
     try {
       const res = await axios.post(`${API}/query`, { question });
       setAnswer(res.data.result.answer);
-      setStats((s) => ({ ...s, queries: s.queries + 1 }));
+      //setStats((s) => ({ ...s, queries: s.queries + 1 }));
+      setStats((s) => ({ ...s, queries: (Number(s.queries) || 0) + 1 }));
     } catch (err) {
       setAnswer("Failed to reach OrgMind API. Make sure the server is running.");
     } finally {
